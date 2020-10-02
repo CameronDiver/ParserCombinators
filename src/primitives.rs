@@ -1,23 +1,35 @@
-use super::parser::{ParseError, ParseSuccess, Parser};
+use super::{ParseError, ParseSuccess, Parser};
 
+/// Returns a parser which applies several parsers sequentially.
+/// The returned parser will fail if any of the provided parsers fail
+/// * Arguments
+/// * `parsers`: A vector of parsers which are applied in the order provided
+///
+/// ```
+/// use parser_combinators::combinators::text;
+/// use parser_combinators::primitives::seq;
+/// use parser_combinators::parse;
+///
+/// let parser = seq(vec![text("abc"), text("xyz")]);
+/// let parts = parse(parser, &String::from("abcxyz"));
+/// assert_eq!(parts[0], "abc");
+/// assert_eq!(parts[1], "xyz");
+/// ```
 pub fn seq<A: 'static>(parsers: Vec<Parser<A>>) -> Parser<Vec<A>> {
     Box::new(move |input| {
         let start = ParseSuccess {
             value: vec![],
             next: input.to_string(),
         };
-        parsers.iter().fold(Ok(start), |iter, p| match iter {
-            Ok(mut success) => match p(&mut success.next) {
-                Ok(s) => {
-                    success.value.push(s.value);
-                    Ok(ParseSuccess {
-                        value: success.value,
-                        next: s.next,
-                    })
-                }
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
+
+        parsers.iter().try_fold(start, |mut iter, p| {
+            p(&iter.next).and_then(|v| {
+                iter.value.push(v.value);
+                Ok(ParseSuccess {
+                    value: iter.value,
+                    next: v.next,
+                })
+            })
         })
     })
 }
@@ -145,7 +157,7 @@ pub fn between<A: 'static, B: 'static, C: 'static>(
 #[cfg(test)]
 mod tests {
     use super::super::combinators::*;
-    use super::super::parser::*;
+    use super::super::*;
     use super::*;
 
     #[derive(Clone, Debug, Eq, PartialEq)]

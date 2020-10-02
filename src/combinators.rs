@@ -1,4 +1,4 @@
-use super::parser::*;
+use super::*;
 
 pub fn integer() -> Parser<u64> {
     Box::new(|input| {
