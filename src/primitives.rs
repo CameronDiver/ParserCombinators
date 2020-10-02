@@ -2,7 +2,8 @@ use super::{ParseError, ParseSuccess, Parser};
 
 /// Returns a parser which applies several parsers sequentially.
 /// The returned parser will fail if any of the provided parsers fail
-/// * Arguments
+/// # Arguments
+///
 /// * `parsers`: A vector of parsers which are applied in the order provided
 ///
 /// ```
@@ -34,6 +35,20 @@ pub fn seq<A: 'static>(parsers: Vec<Parser<A>>) -> Parser<Vec<A>> {
     })
 }
 
+/// Returns a parser which will apply a function to the output of a given parser
+/// # Arguments
+/// * `p`: A parser to apply to the input
+/// * `func`: A function to apply to the output of the parser
+///
+/// ```
+/// use parser_combinators::combinators::text;
+/// use parser_combinators::primitives::map;
+/// use parser_combinators::parse;
+///
+/// let parser = map(text("abc"), |t| t.to_uppercase());
+/// let out = parse(parser, &String::from("abc"));
+/// assert_eq!(out, "ABC");
+/// ```
 pub fn map<A: 'static, B: 'static>(p: Parser<A>, func: fn(A) -> B) -> Parser<B> {
     Box::new(move |input| match p(input) {
         Ok(res) => Ok(ParseSuccess {
@@ -44,6 +59,21 @@ pub fn map<A: 'static, B: 'static>(p: Parser<A>, func: fn(A) -> B) -> Parser<B> 
     })
 }
 
+/// Returns a parser which will try to apply the first parser, and if that
+/// fails, then the second
+/// # Arguments
+/// * `p`: Parser to apply first
+/// * `q`: Parser to apply if first parser fails
+///
+/// ```
+/// use parser_combinators::combinators::text;
+/// use parser_combinators::primitives::or;
+/// use parser_combinators::parse;
+///
+/// let parser = or(text("abc"), text("xyz"));
+/// let out = parse(parser, &String::from("xyz"));
+/// assert_eq!(out, "xyz");
+/// ```
 pub fn or<A: 'static>(p: Parser<A>, q: Parser<A>) -> Parser<A> {
     Box::new(move |input| match p(input) {
         Ok(res) => Ok(res),
@@ -58,6 +88,20 @@ pub fn or<A: 'static>(p: Parser<A>, q: Parser<A>) -> Parser<A> {
     })
 }
 
+/// Returns a parser which will attempt a apply a list of parsers in turn,
+/// returning the first parse result that succeeds
+/// # Arguments
+/// * `parser`: A vector of parsers to apply in turn
+///
+/// ```
+/// use parser_combinators::combinators::text;
+/// use parser_combinators::primitives::one_of;
+/// use parser_combinators::parse;
+///
+/// let parser = one_of(vec![text("abc"), text("def"), text("xyz")]);
+/// let out = parse(parser, &String::from("def"));
+/// assert_eq!(out, "def");
+/// ```
 pub fn one_of<A: 'static>(parsers: Vec<Parser<A>>) -> Parser<A> {
     Box::new(move |input| {
         let mut failures: Vec<ParseError> = vec![];
@@ -83,6 +127,22 @@ pub fn one_of<A: 'static>(parsers: Vec<Parser<A>>) -> Parser<A> {
     })
 }
 
+/// Returns a parser which tries apply the given parser 0 or more times and
+/// returns a vector of the parse values
+/// # Arguments
+/// * `p`: A parser to apply repeatedly
+///
+/// ```
+/// use parser_combinators::combinators::text;
+/// use parser_combinators::primitives::many;
+/// use parser_combinators::parse;
+///
+/// let parser = many(text("abc"));
+/// let parts = parse(parser, &String::from("abcabc"));
+/// assert_eq!(parts.len(), 2);
+/// assert_eq!(parts[0], "abc");
+/// assert_eq!(parts[1], "abc");
+/// ```
 pub fn many<A: 'static>(p: Parser<A>) -> Parser<Vec<A>> {
     Box::new(move |input| {
         let mut values: Vec<A> = vec![];
@@ -104,6 +164,23 @@ pub fn many<A: 'static>(p: Parser<A>) -> Parser<Vec<A>> {
     })
 }
 
+/// Returns a parser which tries apply the given parser 1 or more times and
+/// returns a vector of the parse values. If the parser does not match at least
+/// once, the parser fails
+/// # Arguments
+/// * `p`: A parser to apply repeatedly
+///
+/// ```
+/// use parser_combinators::combinators::text;
+/// use parser_combinators::primitives::many;
+/// use parser_combinators::parse;
+///
+/// let parser = many(text("abc"));
+/// let parts = parse(parser, &String::from("abcabc"));
+/// assert_eq!(parts.len(), 2);
+/// assert_eq!(parts[0], "abc");
+/// assert_eq!(parts[1], "abc");
+/// ```
 pub fn many1<A: 'static>(p: Parser<A>) -> Parser<Vec<A>> {
     Box::new(move |input| {
         let mut values: Vec<A> = vec![];
@@ -132,6 +209,7 @@ pub fn many1<A: 'static>(p: Parser<A>) -> Parser<Vec<A>> {
     })
 }
 
+// TODO: Docs
 pub fn between<A: 'static, B: 'static, C: 'static>(
     p: Parser<A>,
     before: Parser<B>,
