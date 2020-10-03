@@ -16,7 +16,7 @@ use super::{ParseError, ParseSuccess, Parser};
 /// assert_eq!(parts[0], "abc");
 /// assert_eq!(parts[1], "xyz");
 /// ```
-pub fn seq<A: 'static>(parsers: Vec<Parser<A>>) -> Parser<Vec<A>> {
+pub fn seq<A: 'static + Clone>(parsers: Vec<Parser<A>>) -> Parser<Vec<A>> {
     Box::new(move |input| {
         let start = ParseSuccess {
             value: vec![],
@@ -46,7 +46,7 @@ pub fn seq<A: 'static>(parsers: Vec<Parser<A>>) -> Parser<Vec<A>> {
 /// let out = parse(parser, &String::from("abc"));
 /// assert_eq!(out, "ABC");
 /// ```
-pub fn map<A: 'static, B: 'static>(p: Parser<A>, func: fn(A) -> B) -> Parser<B> {
+pub fn map<A: 'static + Clone, B: 'static + Clone>(p: Parser<A>, func: fn(A) -> B) -> Parser<B> {
     Box::new(move |input| {
         p(input).map(|res| ParseSuccess {
             value: func(res.value),
@@ -203,7 +203,23 @@ pub fn many1<A: 'static>(p: Parser<A>) -> Parser<Vec<A>> {
     })
 }
 
-// TODO: Docs
+/// Returns a parser which first tries to apply `before`,
+/// then `p` then `after`, and retuns the value parsed by
+/// `p`
+/// # Arguments
+/// `p`: The parser whose successful parse value will be
+/// returned
+/// `before`: The parser which is applied first
+/// `after`: The parser which is applied last
+///
+/// ```
+/// use parser_combinators::primitives::between;
+/// use parser_combinators::combinators::text;
+/// use parser_combinators::parse;
+///
+/// let p = between(text("abc"), text("("), text(")"));
+/// assert_eq!(parse(p, "(abc)"), "abc");
+/// ```
 pub fn between<A: 'static, B: 'static, C: 'static>(
     p: Parser<A>,
     before: Parser<B>,
@@ -224,6 +240,31 @@ pub fn between<A: 'static, B: 'static, C: 'static>(
     })
 }
 
+// TODO: docs
+pub fn not_followed_by<A: 'static + Clone, B: 'static>(p: Parser<A>, q: Parser<B>) -> Parser<A> {
+    Box::new(move |input| {
+        let v = p(input)?;
+        let ret = v.clone();
+        q(&v.next).map_or_else(
+            |_| Ok(ret),
+            |_| {
+                Err(ParseError {
+                    input: input.to_string(),
+                    fatal: true,
+                    expected: format!("something other than {}", v.next),
+                })
+            },
+        )
+    })
+}
+
+pub fn skip<A: 'static, B: 'static>(p: Parser<A>, q: Parser<B>) -> Parser<B> {
+    Box::new(move |input| match p(input) {
+        Ok(res) => q(&res.next),
+        Err(_) => q(input),
+    })
+}
+
 /// Returns a parser that always succeeds, either with a
 /// Some() value or None. If the parser does not succeed,
 /// no input is consumed
@@ -239,7 +280,7 @@ pub fn between<A: 'static, B: 'static, C: 'static>(
 /// let p = maybe(text("abc"));
 /// assert_eq!(parse(p, "def"), None);
 /// ```
-pub fn maybe<A: 'static>(p: Parser<A>) -> Parser<Option<A>> {
+pub fn maybe<A: 'static + Clone>(p: Parser<A>) -> Parser<Option<A>> {
     let to_some = map(p, Some);
     Box::new(move |input| {
         let original = input.to_string();
@@ -442,5 +483,26 @@ mod tests {
     }
 
     #[test]
-    fn maybe_test() {}
+    fn maybe_test() {
+        // TODO
+    }
+
+    #[test]
+    fn skip_test() {
+        let p = skip(many(char(' ')), text("abc"));
+        assert_eq!(parse(p, "    abc"), "abc");
+
+        assert_eq!(parse(skip(many(char(' ')), text("abc")), "abc"), "abc");
+    }
+
+    #[test]
+    fn not_followed_by_test() {
+        assert_eq!(parse(not_followed_by(text("abc"), text(",")), "abc"), "abc");
+    }
+
+    #[test]
+    #[should_panic]
+    fn not_followed_by_test_failure() {
+        parse(not_followed_by(text("abc"), text(",")), "abc,");
+    }
 }

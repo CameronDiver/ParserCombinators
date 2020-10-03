@@ -94,6 +94,35 @@ pub fn digit() -> Parser<u32> {
     })
 }
 
+pub fn char(c: char) -> Parser<char> {
+    Box::new(move |input| {
+        let mut cs = input.chars();
+        cs.next()
+            .map(|v| {
+                if v == c {
+                    Ok(ParseSuccess {
+                        value: v,
+                        next: cs.collect(),
+                    })
+                } else {
+                    Err(ParseError {
+                        fatal: true,
+                        input: input.to_string(),
+                        expected: format!("char {}", c),
+                    })
+                }
+            })
+            .or_else(|| {
+                Some(Err(ParseError {
+                    fatal: true,
+                    input: input.to_string(),
+                    expected: format!("char {}", c),
+                }))
+            })
+            .unwrap()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::primitives::*;
@@ -152,5 +181,16 @@ mod tests {
         assert_eq!(many_digits[0], 1);
         assert_eq!(many_digits[1], 2);
         assert_eq!(many_digits[2], 3);
+    }
+
+    #[test]
+    fn char_test() {
+        assert_eq!(parse(char('a'), "a"), 'a');
+        assert_eq!(parse(char('a'), "ab"), 'a');
+    }
+
+    #[test]
+    fn char_unicode_test() {
+        assert_eq!(parse(char('💩'), "💩"), '💩');
     }
 }
