@@ -24,18 +24,10 @@ pub fn seq<A: 'static>(parsers: Vec<Parser<A>>) -> Parser<Vec<A>> {
         };
 
         parsers.iter().try_fold(start, |mut iter, p| {
-            // let res = p(&iter.next)?;
-            // Ok(ParseSuccess {
-            //     value: res.value,
-            //     next:
-            // })
-            p(&iter.next).and_then(|v| {
-                iter.value.push(v.value);
-                Ok(ParseSuccess {
-                    value: iter.value,
-                    next: v.next,
-                })
-            })
+            let res = p(&iter.next)?;
+            iter.value.push(res.value);
+            iter.next = res.next;
+            Ok(iter)
         })
     })
 }
@@ -79,16 +71,14 @@ pub fn map<A: 'static, B: 'static>(p: Parser<A>, func: fn(A) -> B) -> Parser<B> 
 /// assert_eq!(out, "xyz");
 /// ```
 pub fn or<A: 'static>(p: Parser<A>, q: Parser<A>) -> Parser<A> {
-    Box::new(move |input| match p(input) {
-        Ok(res) => Ok(res),
-        Err(e) => match q(input) {
-            Ok(res) => Ok(res),
-            Err(e2) => Err(ParseError {
+    Box::new(move |input| {
+        p(input).or_else(|e| {
+            q(input).map_err(|e2| ParseError {
                 expected: format!("{} or {}", e.expected, e2.expected),
                 fatal: true,
                 input: input.to_string(),
-            }),
-        },
+            })
+        })
     })
 }
 
@@ -150,21 +140,21 @@ pub fn one_of<A: 'static>(parsers: Vec<Parser<A>>) -> Parser<A> {
 pub fn many<A: 'static>(p: Parser<A>) -> Parser<Vec<A>> {
     Box::new(move |input| {
         let mut values: Vec<A> = vec![];
-        let mut current = input.clone();
+        let mut current = input.to_string();
         'parse: loop {
             match p(&current) {
                 Ok(res) => {
                     values.push(res.value);
-                    current = res.next.clone();
+                    current = res.next;
                 }
                 _ => break 'parse,
             }
         }
 
-        return Ok(ParseSuccess {
+        Ok(ParseSuccess {
             value: values,
-            next: current.to_string(),
-        });
+            next: current,
+        })
     })
 }
 
@@ -188,14 +178,14 @@ pub fn many<A: 'static>(p: Parser<A>) -> Parser<Vec<A>> {
 pub fn many1<A: 'static>(p: Parser<A>) -> Parser<Vec<A>> {
     Box::new(move |input| {
         let mut values: Vec<A> = vec![];
-        let mut current = input.clone();
+        let mut current = input.to_string();
         let mut first = true;
         'parse: loop {
             match p(&current) {
                 Ok(res) => {
                     first = false;
                     values.push(res.value);
-                    current = res.next.clone();
+                    current = res.next;
                 }
                 Err(e) => {
                     if first {
@@ -206,10 +196,10 @@ pub fn many1<A: 'static>(p: Parser<A>) -> Parser<Vec<A>> {
             }
         }
 
-        return Ok(ParseSuccess {
+        Ok(ParseSuccess {
             value: values,
-            next: current.to_string(),
-        });
+            next: current,
+        })
     })
 }
 
@@ -227,12 +217,36 @@ pub fn between<A: 'static, B: 'static, C: 'static>(
                 val = Some(res.value);
                 after(&res.next)
             })
-            .and_then(|last| {
-                Ok(ParseSuccess {
-                    value: val.unwrap(),
-                    next: last.next.to_string(),
-                })
+            .map(|last| ParseSuccess {
+                value: val.unwrap(),
+                next: last.next,
             })
+    })
+}
+
+/// Returns a parser that always succeeds, either with a
+/// Some() value or None. If the parser does not succeed,
+/// no input is consumed
+///
+/// # Arguments
+/// * `p`: A parser to try and apply
+///
+/// ```
+/// use parser_combinators::primitives::maybe;
+/// use parser_combinators::combinators::text;
+/// use parser_combinators::parse;
+///
+/// let p = maybe(text("abc"));
+/// assert_eq!(parse(p, "def"), None);
+/// ```
+pub fn maybe<A: 'static>(p: Parser<A>) -> Parser<Option<A>> {
+    let to_some = map(p, Some);
+    Box::new(move |input| {
+        let original = input.to_string();
+        to_some(input).or(Ok(ParseSuccess {
+            value: None,
+            next: original,
+        }))
     })
 }
 
@@ -402,4 +416,31 @@ mod tests {
             &String::from("(abc"),
         );
     }
+
+    #[test]
+    fn backtrack_or_test() {
+        let p1 = seq(vec![text("abc"), text("xyz")]);
+        let p2 = seq(vec![text("abc"), text("def")]);
+        let parser = or(p1, p2);
+
+        let parts = parse(parser, "abcdef");
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0], "abc");
+        assert_eq!(parts[1], "def");
+    }
+
+    #[test]
+    fn backtrack_one_of_test() {
+        let p1 = seq(vec![text("abc"), text("xyz")]);
+        let p2 = seq(vec![text("abc"), text("def")]);
+        let parser = one_of(vec![p1, p2]);
+
+        let parts = parse(parser, "abcdef");
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0], "abc");
+        assert_eq!(parts[1], "def");
+    }
+
+    #[test]
+    fn maybe_test() {}
 }
