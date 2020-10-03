@@ -106,7 +106,7 @@ pub fn one_of<A: 'static>(parsers: Vec<Parser<A>>) -> Parser<A> {
             }
         }
 
-        return Err(ParseError {
+        Err(ParseError {
             input: input.to_string(),
             fatal: true,
             expected: format!(
@@ -117,7 +117,7 @@ pub fn one_of<A: 'static>(parsers: Vec<Parser<A>>) -> Parser<A> {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
-        });
+        })
     })
 }
 
