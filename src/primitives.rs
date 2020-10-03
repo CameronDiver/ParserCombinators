@@ -24,6 +24,11 @@ pub fn seq<A: 'static>(parsers: Vec<Parser<A>>) -> Parser<Vec<A>> {
         };
 
         parsers.iter().try_fold(start, |mut iter, p| {
+            // let res = p(&iter.next)?;
+            // Ok(ParseSuccess {
+            //     value: res.value,
+            //     next:
+            // })
             p(&iter.next).and_then(|v| {
                 iter.value.push(v.value);
                 Ok(ParseSuccess {
@@ -50,12 +55,11 @@ pub fn seq<A: 'static>(parsers: Vec<Parser<A>>) -> Parser<Vec<A>> {
 /// assert_eq!(out, "ABC");
 /// ```
 pub fn map<A: 'static, B: 'static>(p: Parser<A>, func: fn(A) -> B) -> Parser<B> {
-    Box::new(move |input| match p(input) {
-        Ok(res) => Ok(ParseSuccess {
+    Box::new(move |input| {
+        p(input).map(|res| ParseSuccess {
             value: func(res.value),
             next: res.next,
-        }),
-        Err(e) => Err(e),
+        })
     })
 }
 
