@@ -1,0 +1,3 @@
+* make macros that makes constructing parsers easier
+* combinators:
+	* sepBy, sepEndBy
