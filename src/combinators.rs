@@ -1,3 +1,4 @@
+use super::primitives::{many, one_of};
 use super::*;
 
 pub fn integer() -> Parser<u64> {
@@ -121,6 +122,10 @@ pub fn char(c: char) -> Parser<char> {
             })
             .unwrap()
     })
+}
+
+pub fn ws() -> Parser<char> {
+    one_of(vec![char(' '), char('\t'), char('\n'), char('\r')])
 }
 
 #[cfg(test)]

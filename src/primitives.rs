@@ -121,6 +121,37 @@ pub fn one_of<A: 'static>(parsers: Vec<Parser<A>>) -> Parser<A> {
     })
 }
 
+pub fn sep_by<A: 'static, B: 'static>(p: Parser<A>, q: Parser<B>) -> Parser<Vec<A>> {
+    Box::new(move |input| {
+        let mut values: Vec<A> = vec![];
+        let mut current = input.to_string();
+
+        loop {
+            let v = p(&current);
+            match v {
+                Ok(res) => match q(&res.next) {
+                    Ok(res2) => {
+                        current = res2.next;
+                        values.push(res.value);
+                    }
+                    Err(_) => {
+                        return Ok(ParseSuccess {
+                            value: values,
+                            next: current,
+                        })
+                    }
+                },
+                Err(_) => {
+                    return Ok(ParseSuccess {
+                        value: values,
+                        next: current,
+                    })
+                }
+            };
+        }
+    })
+}
+
 /// Returns a parser which tries apply the given parser 0 or more times and
 /// returns a vector of the parse values
 /// # Arguments
@@ -504,5 +535,15 @@ mod tests {
     #[should_panic]
     fn not_followed_by_test_failure() {
         parse(not_followed_by(text("abc"), text(",")), "abc,");
+    }
+
+    #[test]
+    fn sep_by_test() {
+        let p = sep_by(integer(), char(';'));
+        let values = parse(p, "1;23;5;");
+        assert_eq!(values.len(), 3);
+        assert_eq!(values[0], 1);
+        assert_eq!(values[1], 23);
+        assert_eq!(values[2], 5);
     }
 }
